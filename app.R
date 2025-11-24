@@ -446,8 +446,8 @@ server = function(input, output, session) {
          layout = layout_with_fr(G))
     
     legend("topright",
-           legend = c("Susceptible (S)", "Infectado (I)", "Recuperado (R)", "Vacunado (V)"),
-           col = c("#4A9EFF", "#FF6B6B", primary_color, "#C77DFF"),
+           legend = c("Susceptible (S)", "Infectado (I)"),
+           col = c("#4A9EFF", "#FF6B6B"),
            pch = 19,
            pt.cex = 2,
            text.col = fg_color,
@@ -457,42 +457,29 @@ server = function(input, output, session) {
   }, bg = "#222222")
   
   
-  output$network_plot = renderPlot({
-    req(network_graph())
+  output$sim_plot = renderPlot({
+    req(simulation_data())
     
-    G = network_graph()
-    V(G)$state = 0
-    initial_infected = sample(1:vcount(G), input$initial_infected)
-    V(G)$state[initial_infected] = 1
+    sims_long = simulation_data() %>%
+      pivot_longer(cols = c(S, I, R, V),
+                   names_to = "Compartimento",
+                   values_to = "N")
     
-    colors = c("#4A9EFF", "#FF6B6B", primary_color, "#7BD389")[V(G)$state + 1]
-    
-    par(bg = "#222222", col = fg_color, col.axis = fg_color, 
-        col.lab = fg_color, col.main = primary_color, family = "sans")
-    
-    plot(G,
-         vertex.color = colors,
-         vertex.size = 8,
-         vertex.label = NA,
-         vertex.frame.color = "#3A3A3A",
-         edge.color = "#4A4A4A",
-         edge.width = 0.8,
-         main = paste("Red inicial -", 
-                      switch(input$network_type,
-                             "regular" = "Regular",
-                             "erdos_renyi" = "Erdős-Rényi",
-                             "barabasi_albert" = "Barabási-Albert")),
-         layout = layout_with_fr(G))
-    
-    legend("topright",
-           legend = c("Susceptible", "Infectado"),
-           col = c("#4A9EFF", "#FF6B6B"),
-           pch = 19,
-           pt.cex = 2,
-           text.col = fg_color,
-           bg = bg_color,
-           box.col = "#3A3A3A",
-           cex = 1.1)
+    ggplot(sims_long, aes(x = t, y = N, group = interaction(simulation, Compartimento), color = Compartimento)) +
+      geom_line(alpha = 0.3) +
+      scale_color_manual(
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
+        labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
+      ) +
+      labs(
+        title = "Trayectorias de las Simulaciones Estocásticas",
+        subtitle = paste(input$n_sims, "simulaciones individuales"),
+        x = "Tiempo",
+        y = "Número de individuos",
+        color = "Estado"
+      ) +
+      theme_custom() +
+      guides(color = guide_legend(override.aes = list(alpha = 1)))
   }, bg = "#222222")
   
   output$stats_plot = renderPlot({
@@ -527,12 +514,12 @@ server = function(input, output, session) {
       geom_ribbon(aes(ymin = Media - SD, ymax = Media + SD),
                   alpha = 0.25, color = NA) +
       scale_color_manual(
-        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#7BD389"),
-        labels = c("Susceptibles", "Infectados", "Recuperados", "Vacunados")
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
+        labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
       ) +
       scale_fill_manual(
-        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#7BD389"),
-        labels = c("Susceptibles", "Infectados", "Recuperados", "Vacunados")
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
+        labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
       ) +
       labs(
         title = "Media ± Desviación Estándar",
@@ -598,4 +585,3 @@ server = function(input, output, session) {
 ###########################################################################
 
 shinyApp(ui = ui, server = server)
-
