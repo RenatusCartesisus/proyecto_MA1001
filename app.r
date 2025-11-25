@@ -12,7 +12,7 @@ library(tidyr)
 bg_main_color = "#1A1A2E"      # Azul oscuro imperial (fondo principal de la app)
 bg_sidebar_color = "#16213E"   # Azul más oscuro para la barra lateral
 fg_text_color = "#EAEAEA"       # Blanco humo para texto general
-primary_accent_color = "#00BFFF" # Azul cielo profundo para acentos y títulos
+primary_accent_color = "#00FFFF" # Azul cielo profundo para acentos y títulos
 color_s = "#4A9EFF"            # Azul para susceptibles
 color_i = "#FF6B6B"            # Rojo para infectados
 color_r = "#39F7A1"            # Verde menta para recuperados
@@ -483,7 +483,8 @@ server = function(input, output, session) {
         color = "Estado"
       ) +
       theme_custom() +
-      guides(color = guide_legend(override.aes = list(alpha = 1)))
+      guides(color = guide_legend(override.aes = list(alpha = 1))) +
+      coord_cartesian(xlim = c(0, input$T))
   }, bg = bg_main_color)
   
   output$stats_plot = renderPlot({
@@ -533,7 +534,8 @@ server = function(input, output, session) {
         color = "Estado",
         fill = "Estado"
       ) +
-      theme_custom()
+      theme_custom() +
+      coord_cartesian(xlim = c(0, input$T))
   }, bg = bg_main_color)
   
   output$r0_display = renderUI({
