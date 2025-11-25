@@ -5,31 +5,19 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 
-# TEMA Y COLORES
+#TEMA
 ###########################################################################
 
-# Paleta de colores profesional para un diseño moderno y oscuro
-bg_main_color = "#1A1A2E"      # Azul oscuro imperial (fondo principal de la app)
-bg_sidebar_color = "#16213E"   # Azul más oscuro para la barra lateral
-fg_text_color = "#EAEAEA"       # Blanco humo para texto general
-primary_accent_color = "#00BFFF" # Azul cielo profundo para acentos y títulos
-color_s = "#4A9EFF"            # Azul para susceptibles
-color_i = "#FF6B6B"            # Rojo para infectados
-color_r = "#39F7A1"            # Verde menta para recuperados
-color_v = "#C77DFF"            # Morado para vacunados
-
 theme = bs_theme(
-  bg = bg_main_color,
-  fg = fg_text_color,
-  primary = primary_accent_color,
-  base_font = font_google("Space Mono"),
-  code_font = font_google("Space Mono")
+  bg = "#222222",
+  fg = "#F2F5E9",
+  primary = "#C8F739",
+  baseFont = font_google("Space Mono"),
+  codeFont = font_google("Space Mono")
 )
-
-# Mapeo a nombres de variables existentes para compatibilidad
-primary_color = primary_accent_color
-fg_color = fg_text_color
-bg_color = bg_sidebar_color
+primary_color = "#C8F739"
+fg_color = "#F2F5E9"
+bg_color = "#2F3030"
 
 
 ###########################################################################
@@ -212,7 +200,7 @@ direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, 
 theme_custom = function() {
   theme_minimal(base_size = 14, base_family = "Space Mono") +
     theme(
-      plot.background = element_rect(fill = bg_main_color, color = NA),
+      plot.background = element_rect(fill = "#222222", color = NA),
       panel.background = element_rect(fill = bg_color, color = NA),
       panel.grid.major = element_line(color = "#3A3A3A", linewidth = 0.3),
       panel.grid.minor = element_line(color = "#2F3030", linewidth = 0.2),
@@ -319,7 +307,7 @@ ui = page_sidebar(
                  class = "btn-primary",
                  style = paste0("width: 100%; font-weight: bold; ",
                                 "background-color: ", primary_color, 
-                                "; color: ", bg_sidebar_color, "; border: none;",
+                                "; color: #222222; border: none;",
                                 " font-size: 16px; padding: 12px;")),
     
     hr(style = paste0("border-color: ", primary_color)),
@@ -430,10 +418,10 @@ server = function(input, output, session) {
       V(G)$state[initial_infected] <- 1
     }
     
-    colors_map <- c("0" = color_s, "1" = color_i, "2" = color_r, "3" = color_v)
+    colors_map <- c("0" = "#4A9EFF", "1" = "#FF6B6B", "2" = primary_color, "3" = "#C77DFF")
     node_colors <- colors_map[as.character(V(G)$state)]
     
-    par(bg = bg_main_color, col = fg_color, col.axis = fg_color, 
+    par(bg = "#222222", col = fg_color, col.axis = fg_color, 
         col.lab = fg_color, col.main = primary_color, family = "sans")
     
     plot(G,
@@ -451,15 +439,15 @@ server = function(input, output, session) {
          layout = layout_with_fr(G))
     
     legend("topright",
-           legend = c("Susceptible (S)", "Infectado (I)", "Recuperado (R)", "Vacunado (V)"),
-           col = c(color_s, color_i, color_r, color_v),
+           legend = c("Susceptible (S)", "Infectado (I)"),
+           col = c("#4A9EFF", "#FF6B6B"),
            pch = 19,
            pt.cex = 2,
            text.col = fg_color,
            bg = bg_color,
            box.col = "#3A3A3A",
            cex = 1.1)
-  }, bg = bg_main_color)
+  }, bg = "#222222")
   
   output$sim_plot = renderPlot({
     req(simulation_data())
@@ -472,7 +460,7 @@ server = function(input, output, session) {
     ggplot(sims_long, aes(x = t, y = N, group = interaction(simulation, Compartimento), color = Compartimento)) +
       geom_line(alpha = 0.3) +
       scale_color_manual(
-        values = c("S" = color_s, "I" = color_i, "R" = color_r, "V" = color_v),
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
         labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
       ) +
       labs(
@@ -484,7 +472,7 @@ server = function(input, output, session) {
       ) +
       theme_custom() +
       guides(color = guide_legend(override.aes = list(alpha = 1)))
-  }, bg = bg_main_color)
+  }, bg = "#222222")
   
   output$stats_plot = renderPlot({
     req(simulation_data())
@@ -518,11 +506,11 @@ server = function(input, output, session) {
       geom_ribbon(aes(ymin = Media - SD, ymax = Media + SD),
                   alpha = 0.25, color = NA) +
       scale_color_manual(
-        values = c("S" = color_s, "I" = color_i, "R" = color_r, "V" = color_v),
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
         labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
       ) +
       scale_fill_manual(
-        values = c("S" = color_s, "I" = color_i, "R" = color_r, "V" = color_v),
+        values = c("S" = "#4A9EFF", "I" = "#FF6B6B", "R" = primary_color, "V" = "#C77DFF"),
         labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
       ) +
       labs(
@@ -534,11 +522,11 @@ server = function(input, output, session) {
         fill = "Estado"
       ) +
       theme_custom()
-  }, bg = bg_main_color)
+  }, bg = "#222222")
   
   output$r0_display = renderUI({
     R0 = input$beta * input$k / input$miu
-    color = if(R0 > 1) color_i else primary_color
+    color = if(R0 > 1) "#FF6B6B" else primary_color
     
     div(
       style = "text-align: center; padding: 10px;",
@@ -552,7 +540,7 @@ server = function(input, output, session) {
       ),
       div(
         style = paste0("font-size: 12px; margin-top: 5px; color: ", 
-                       if(R0 > 1) color_i else primary_color, ";"),
+                       if(R0 > 1) "#FF6B6B" else primary_color, ";"),
         if(R0 > 1) "Epidemia esperada" else "✓ Extinción esperada"
       )
     )
