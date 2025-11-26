@@ -254,15 +254,15 @@ ui = page_sidebar(
       
       sliderInput("beta", 
                   "Tasa de infección (β):",
-                  min = 0.01, max = 0.5, value = 0.1, step = 0.01),
+                  min = 0.01, max = 0.5, value = 0.32, step = 0.01),
       
       sliderInput("miu", 
                   "Tasa de recuperación (μ):",
-                  min = 0.01, max = 0.2, value = 0.03, step = 0.01),
+                  min = 0.01, max = 0.2, value = 0.083, step = 0.01),
       
       sliderInput("nu",
                   "Tasa de vacunación (ν):",
-                  min = 0, max = 0.5, value = 0.01, step = 0.01)
+                  min = 0, max = 0.5, value = 0.15, step = 0.01)
     ),
     
     card(
@@ -274,7 +274,7 @@ ui = page_sidebar(
       
       sliderInput("N", 
                   "Número de nodos (N):",
-                  min = 50, max = 500, value = 100, step = 50),
+                  min = 50, max = 1000, value = 100, step = 50),
       
       sliderInput("k", 
                   "Grado promedio (k):",
@@ -299,7 +299,7 @@ ui = page_sidebar(
       
       sliderInput("T", 
                   "Tiempo de simulación (T):",
-                  min = 50, max = 500, value = 100, step = 50),
+                  min = 25, max = 500, value = 100, step = 50),
       
       sliderInput("n_sims", 
                   "Número de simulaciones:",
@@ -451,7 +451,7 @@ server = function(input, output, session) {
          layout = layout_with_fr(G))
     
     legend("topright",
-           legend = c("Susceptible (S)", "Infectado (I)", "Recuperado (R)", "Vacunado (V)"),
+           legend = c("Susceptible (S)", "Infectado (I)"),
            col = c(color_s, color_i, color_r, color_v),
            pch = 19,
            pt.cex = 2,
