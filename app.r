@@ -37,7 +37,7 @@ bg_color = bg_sidebar_color
 ###########################################################################
 
 # calculateNodePropensities: recibe vector estado y lista de vecinos
-calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu) {
+calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu, omega) {
   N <- length(state)
   inf_rate <- numeric(N)
   vac_rate <- numeric(N)
@@ -53,11 +53,11 @@ calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu) {
     vac_rate[sus_idx] <- nu
   }
   
-  # Infectados: tasa de recuperación = miu
+  # Asignar tasas a cada nodo según su estado
   lambda <- numeric(N)
-  lambda[state == 0] <- inf_rate[state == 0] + vac_rate[state == 0]
-  lambda[state == 1] <- miu
-  # lambda for recovered/vaccinated stays 0
+  lambda[state == 0] <- inf_rate[state == 0] + vac_rate[state == 0] # S -> I o S -> V
+  lambda[state == 1] <- miu                                       # I -> R
+  lambda[state == 3] <- omega                                     # V -> S
   
   list(lambda = lambda, inf_rate = inf_rate, vac_rate = vac_rate,
        Lambda = sum(lambda))
@@ -77,7 +77,7 @@ draw_next_event_direct <- function(lambda, Lambda) {
 }
 
 # update_states: trabaja con vectores para eficiencia; devuelve vectores actualizados y Lambda
-update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, beta, miu, nu) {
+update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, beta, miu, nu, omega) {
   # state: integer vector; i: índice seleccionado
   s_before <- state[i]
   N <- length(state)
@@ -120,7 +120,7 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
       X["V"] <- X["V"] + 1
       
       # quitar tasas
-      lambda[i] <- 0
+      lambda[i] <- omega # Ahora puede volver a ser S
       inf_rate[i] <- 0
       vac_rate[i] <- 0
     }
@@ -147,6 +147,17 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
         lambda[sus_nb][lambda[sus_nb] < 0] <- 0
       }
     }
+  } else if (s_before == 3) {
+    # V -> S
+    state[i] <- 0
+    X["V"] <- X["V"] - 1
+    X["S"] <- X["S"] + 1
+    
+    # recalcular tasa de infección para este nuevo susceptible
+    infected_neighbors_count <- sum(state[neighbors_i] == 1)
+    inf_rate[i] <- beta * infected_neighbors_count
+    vac_rate[i] <- nu
+    lambda[i] <- inf_rate[i] + vac_rate[i]
   }
   
   # recalcular Lambda (sum lambda)
@@ -156,7 +167,7 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
 }
 
 # direct_method_SIRV_graph: ahora recibe neighbors_list y trabaja con vectores
-direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, T) {
+direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, omega, T) {
   N <- length(state_init)
   
   state <- state_init
@@ -164,7 +175,7 @@ direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, 
          R = sum(state == 2), V = sum(state == 3))
   
   # inicializar tasas usando la función vectorizada
-  props <- calculateNodePropensities(state, neighbors_list, beta, miu, nu)
+  props <- calculateNodePropensities(state, neighbors_list, beta, miu, nu, omega)
   lambda <- props$lambda
   inf_rate <- props$inf_rate
   vac_rate <- props$vac_rate
@@ -185,7 +196,7 @@ direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, 
     # vecinos del nodo i (precomputados)
     neighbors_i <- neighbors_list[[i]]
     res <- update_states(state, lambda, inf_rate, vac_rate, X, i, neighbors_i,
-                         beta, miu, nu)
+                         beta, miu, nu, omega)
     state <- res$state
     lambda <- res$lambda
     inf_rate <- res$inf_rate
@@ -262,7 +273,11 @@ ui = page_sidebar(
       
       sliderInput("nu",
                   "Tasa de vacunación (ν):",
-                  min = 0, max = 0.5, value = 0.01, step = 0.01)
+                  min = 0, max = 0.5, value = 0.01, step = 0.01),
+      
+      sliderInput("omega",
+                  "Tasa de reinfección (ω):",
+                  min = 0, max = 0.1, value = 0.0, step = 0.005)
     ),
     
     card(
@@ -405,7 +420,7 @@ server = function(input, output, session) {
         
         # inicializar propiedades (vectorizado)
         X_t <- direct_method_SIRV_graph(neighbors_list, state,
-                                        input$beta, input$miu, input$nu, input$T)
+                                        input$beta, input$miu, input$nu, input$omega, input$T)
         
         X_t$simulation <- q
         X_array[[q]] <- X_t
