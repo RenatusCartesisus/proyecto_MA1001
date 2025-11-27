@@ -4,6 +4,8 @@ library(igraph)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(deSolve)
+library(plotly)
 
 # TEMA Y COLORES
 ###########################################################################
@@ -31,13 +33,31 @@ primary_color = primary_accent_color
 fg_color = fg_text_color
 bg_color = bg_sidebar_color
 
+###########################################################################
+# MODELO DETERMINISTA SVIR SIMPLE
+###########################################################################
+
+svir_ode_model <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    N <- S + V + I + R
+    if (N == 0) N <- 1 # Evitar división por cero
+
+    dS_dt <- -beta * S * I / N - nu * S
+    dI_dt <- beta * S * I / N - miu * I
+    dR_dt <- miu * I
+    dV_dt <- nu * S
+    
+    list(c(dS_dt, dI_dt, dR_dt, dV_dt))
+  })
+}
+
 
 ###########################################################################
 # FUNCIONES OPTIMIZADAS Y PRECOMPUTACION (Trabajan sobre vectores)
 ###########################################################################
 
 # calculateNodePropensities: recibe vector estado y lista de vecinos
-calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu, omega) {
+calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu) {
   N <- length(state)
   inf_rate <- numeric(N)
   vac_rate <- numeric(N)
@@ -53,11 +73,11 @@ calculateNodePropensities <- function(state, neighbors_list, beta, miu, nu, omeg
     vac_rate[sus_idx] <- nu
   }
   
-  # Asignar tasas a cada nodo según su estado
+  # Infectados: tasa de recuperación = miu
   lambda <- numeric(N)
-  lambda[state == 0] <- inf_rate[state == 0] + vac_rate[state == 0] # S -> I o S -> V
-  lambda[state == 1] <- miu                                       # I -> R
-  lambda[state == 3] <- omega                                     # V -> S
+  lambda[state == 0] <- inf_rate[state == 0] + vac_rate[state == 0]
+  lambda[state == 1] <- miu
+  # lambda for recovered/vaccinated stays 0
   
   list(lambda = lambda, inf_rate = inf_rate, vac_rate = vac_rate,
        Lambda = sum(lambda))
@@ -77,7 +97,7 @@ draw_next_event_direct <- function(lambda, Lambda) {
 }
 
 # update_states: trabaja con vectores para eficiencia; devuelve vectores actualizados y Lambda
-update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, beta, miu, nu, omega) {
+update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, beta, miu, nu) {
   # state: integer vector; i: índice seleccionado
   s_before <- state[i]
   N <- length(state)
@@ -120,7 +140,7 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
       X["V"] <- X["V"] + 1
       
       # quitar tasas
-      lambda[i] <- omega # Ahora puede volver a ser S
+      lambda[i] <- 0
       inf_rate[i] <- 0
       vac_rate[i] <- 0
     }
@@ -147,17 +167,6 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
         lambda[sus_nb][lambda[sus_nb] < 0] <- 0
       }
     }
-  } else if (s_before == 3) {
-    # V -> S
-    state[i] <- 0
-    X["V"] <- X["V"] - 1
-    X["S"] <- X["S"] + 1
-    
-    # recalcular tasa de infección para este nuevo susceptible
-    infected_neighbors_count <- sum(state[neighbors_i] == 1)
-    inf_rate[i] <- beta * infected_neighbors_count
-    vac_rate[i] <- nu
-    lambda[i] <- inf_rate[i] + vac_rate[i]
   }
   
   # recalcular Lambda (sum lambda)
@@ -167,7 +176,7 @@ update_states <- function(state, lambda, inf_rate, vac_rate, X, i, neighbors_i, 
 }
 
 # direct_method_SIRV_graph: ahora recibe neighbors_list y trabaja con vectores
-direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, omega, T) {
+direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, T) {
   N <- length(state_init)
   
   state <- state_init
@@ -175,7 +184,7 @@ direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, 
          R = sum(state == 2), V = sum(state == 3))
   
   # inicializar tasas usando la función vectorizada
-  props <- calculateNodePropensities(state, neighbors_list, beta, miu, nu, omega)
+  props <- calculateNodePropensities(state, neighbors_list, beta, miu, nu)
   lambda <- props$lambda
   inf_rate <- props$inf_rate
   vac_rate <- props$vac_rate
@@ -196,7 +205,7 @@ direct_method_SIRV_graph <- function(neighbors_list, state_init, beta, miu, nu, 
     # vecinos del nodo i (precomputados)
     neighbors_i <- neighbors_list[[i]]
     res <- update_states(state, lambda, inf_rate, vac_rate, X, i, neighbors_i,
-                         beta, miu, nu, omega)
+                         beta, miu, nu)
     state <- res$state
     lambda <- res$lambda
     inf_rate <- res$inf_rate
@@ -249,7 +258,7 @@ ui = page_sidebar(
   theme = theme,
   title = div(
     style = "display: flex; align-items: center; gap: 10px;",
-    span("Modelo SIRV en Redes", style = "font-size: 24px;"),
+    span("Modelo SVIR en Redes", style = "font-size: 24px;"),
   ),
   
   sidebar = sidebar(
@@ -265,19 +274,15 @@ ui = page_sidebar(
       
       sliderInput("beta", 
                   "Tasa de infección (β):",
-                  min = 0.01, max = 0.5, value = 0.1, step = 0.01),
+                  min = 0.01, max = 1.0, value = 0.8, step = 0.01),
       
       sliderInput("miu", 
                   "Tasa de recuperación (μ):",
-                  min = 0.01, max = 0.2, value = 0.03, step = 0.01),
+                  min = 0.01, max = 0.5, value = 0.01, step = 0.01),
       
       sliderInput("nu",
                   "Tasa de vacunación (ν):",
-                  min = 0, max = 0.5, value = 0.01, step = 0.01),
-      
-      sliderInput("omega",
-                  "Tasa de reinfección (ω):",
-                  min = 0, max = 0.1, value = 0.0, step = 0.005)
+                  min = 0, max = 0.5, value = 0.15, step = 0.01)
     ),
     
     card(
@@ -288,8 +293,8 @@ ui = page_sidebar(
       ),
       
       sliderInput("N", 
-                  "Número de nodos (N):",
-                  min = 50, max = 500, value = 100, step = 50),
+                  "Población Total / Nodos (N):",
+                  min = 50, max = 1000, value = 100, step = 50),
       
       sliderInput("k", 
                   "Grado promedio (k):",
@@ -314,14 +319,14 @@ ui = page_sidebar(
       
       sliderInput("T", 
                   "Tiempo de simulación (T):",
-                  min = 50, max = 500, value = 100, step = 50),
+                  min = 25, max = 500, value = 100, step = 50),
       
       sliderInput("n_sims", 
                   "Número de simulaciones:",
                   min = 1, max = 100, value = 50, step = 1),
       
       sliderInput("initial_infected",
-                  "Nodos inicialmente infectados:",
+                  "Individuos inicialmente infectados:",
                   min = 1, max = 10, value = 1, step = 1),
       
       numericInput("seed",
@@ -356,6 +361,10 @@ ui = page_sidebar(
   
   navset_card_pill(
     nav_panel(
+      "Modelo Determinista",
+      plotlyOutput("ode_plot", height = "650px")
+    ),
+    nav_panel(
       "Simulaciones",
       plotOutput("sim_plot", height = "650px")
     ),
@@ -378,9 +387,34 @@ server = function(input, output, session) {
   
   simulation_data = reactiveVal(NULL)
   network_graph = reactiveVal(NULL)
+  ode_results = reactiveVal(NULL)
   
   observeEvent(input$simulate, {
-    withProgress(message = 'Ejecutando simulaciones...', value = 0, {
+    withProgress(message = 'Iniciando...', value = 0, {
+      
+      # --- Modelo Determinista ---
+      setProgress(value = 0.1, message = "Resolviendo modelo determinista...")
+      
+      params_ode <- c(
+        beta = input$beta,
+        miu = input$miu,
+        nu = input$nu
+      )
+      
+      # Condiciones iniciales para el modelo ODE
+      I0 <- input$initial_infected
+      S0 <- input$N - I0
+      y_ini <- c(S = S0, I = I0, R = 0, V = 0)
+      
+      times <- seq(0, input$T, by = 0.1)
+      
+      # Resolver ODE
+      ode_out <- ode(y = y_ini, times = times, func = svir_ode_model, parms = params_ode)
+      ode_results(as.data.frame(ode_out))
+      
+      
+      # --- Modelo Estocástico ---
+      setProgress(value = 0.3, message = 'Ejecutando simulaciones estocásticas...')
       set.seed(input$seed)
       
       # Construcción de la red base G0
@@ -397,8 +431,6 @@ server = function(input, output, session) {
       Nnodes <- vcount(G0)
       
       # ---------- PRECOMPUTACION ----------
-      # Lista de vecinos (vector de enteros por nodo), precomputada una vez
-      # usamos as_adj(sparse = FALSE) para acceso rápido; para N grande podrías usar sparse
       adj_mat <- as_adj(G0, sparse = FALSE)
       neighbors_list <- lapply(1:Nnodes, function(i) which(adj_mat[i, ] != 0))
       # -----------------------------------
@@ -406,21 +438,14 @@ server = function(input, output, session) {
       X_array <- vector("list", input$n_sims)
       
       for (q in seq_len(input$n_sims)) {
-        incProgress(1/input$n_sims, detail = paste("Simulación", q))
+        incProgress(0.7/input$n_sims, detail = paste("Simulación", q))
         
-        # Iniciar vectores de estado y tasas (más rápido que manipular el grafo)
-        state <- integer(Nnodes) # 0 = S por defecto
-        lambda <- numeric(Nnodes)
-        inf_rate <- numeric(Nnodes)
-        vac_rate <- numeric(Nnodes)
+        state <- integer(Nnodes)
+        initial_infected_nodes <- sample.int(Nnodes, input$initial_infected)
+        state[initial_infected_nodes] <- 1
         
-        # infectados iniciales
-        initial_infected <- sample.int(Nnodes, input$initial_infected)
-        state[initial_infected] <- 1
-        
-        # inicializar propiedades (vectorizado)
         X_t <- direct_method_SIRV_graph(neighbors_list, state,
-                                        input$beta, input$miu, input$nu, input$omega, input$T)
+                                        input$beta, input$miu, input$nu, input$T)
         
         X_t$simulation <- q
         X_array[[q]] <- X_t
@@ -428,12 +453,44 @@ server = function(input, output, session) {
       
       all_sims <- bind_rows(X_array)
       simulation_data(all_sims)
+      setProgress(1, message = "Completado")
     })
   })
   
   ###########################################################################
-  # GRAFICOS (igual que antes)
+  # GRAFICOS
   ###########################################################################
+  
+  output$ode_plot <- renderPlotly({
+    req(ode_results())
+    
+    df_ode <- ode_results() %>%
+      pivot_longer(cols = c(S, V, I, R), names_to = "Compartimento", values_to = "N")
+      
+    p <- ggplot(df_ode, aes(x = time, y = N, color = Compartimento)) +
+      geom_line(linewidth = 1) +
+      scale_color_manual(
+        values = c("S" = color_s, "I" = color_i, "R" = color_r, "V" = color_v),
+        labels = c("S" = "Susceptibles", "I" = "Infectados", "R" = "Recuperados", "V" = "Vacunados")
+      ) +
+      labs(
+        title = "Modelo Determinista SVIR",
+        subtitle = "Solución del sistema de Ecuaciones Diferenciales Ordinarias (ODE)",
+        x = "Tiempo",
+        y = "Número de individuos",
+        color = "Estado"
+      ) +
+      theme_custom()
+    
+    ggplotly(p) %>%
+      layout(
+        plot_bgcolor = bg_main_color,
+        paper_bgcolor = bg_main_color,
+        font = list(color = fg_color),
+        legend = list(bgcolor = bg_color, bordercolor = "#3A3A3A")
+      )
+  })
+  
   
   output$network_plot = renderPlot({
     req(network_graph())
@@ -554,6 +611,7 @@ server = function(input, output, session) {
   }, bg = bg_main_color)
   
   output$r0_display = renderUI({
+    # R0 para el modelo estocástico no siempre es tan simple, pero k es una aprox. del grado
     R0 = input$beta * input$k / input$miu
     color = if(R0 > 1) color_i else primary_color
     
@@ -561,11 +619,11 @@ server = function(input, output, session) {
       style = "text-align: center; padding: 10px;",
       div(
         style = "font-size: 14px; color: #999999;",
-        "Número Reproductivo Básico"
+        "R₀ (Aproximado para Red)"
       ),
       div(
         style = paste0("font-size: 32px; font-weight: bold; color: ", color, ";"),
-        paste0("R₀ = ", round(R0, 3))
+        paste0("R₀ ≈ ", round(R0, 3))
       ),
       div(
         style = paste0("font-size: 12px; margin-top: 5px; color: ", 
