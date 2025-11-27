@@ -7,7 +7,7 @@ library(tidyr)
 library(deSolve)
 library(plotly)
 
-# TEMA Y COLORES
+#TEMA
 ###########################################################################
 
 # Paleta de colores profesional para un diseño moderno y oscuro
