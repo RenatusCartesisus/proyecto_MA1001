@@ -7,25 +7,25 @@ library(tidyr)
 library(deSolve)
 library(plotly)
 
-#TEMA
+# TEMA Y COLORES
 ###########################################################################
 
 # Paleta de colores profesional para un diseño moderno y oscuro
-bg_main_color = "#1A1A2E"      # Azul oscuro imperial (fondo principal de la app)
-bg_sidebar_color = "#16213E"   # Azul más oscuro para la barra lateral
-fg_text_color = "#EAEAEA"       # Blanco humo para texto general
-primary_accent_color = "#00FFFF" # Azul cielo profundo para acentos y títulos
-color_s = "#4A9EFF"            # Azul para susceptibles
-color_i = "#FF6B6B"            # Rojo para infectados
-color_r = "#39F7A1"            # Verde menta para recuperados
-color_v = "#C77DFF"            # Morado para vacunados
+bg_main_color = "#1A1A2E"      # Fondo principal de la app
+bg_sidebar_color = "#16213E"   # Barra lateral
+fg_text_color = "#EAEAEA"       # Texto general
+primary_accent_color = "#00FFFF" # Acentuar y títulos
+color_s = "#4A9EFF"            # Susceptibles
+color_i = "#FF6B6B"            # Infectados
+color_r = "#39F7A1"            # Recuperados
+color_v = "#C77DFF"            # Vacunados
 
 theme = bs_theme(
   bg = bg_main_color,
   fg = fg_text_color,
   primary = primary_accent_color,
-  base_font = font_google("Space Mono"),
-  code_font = font_google("Space Mono")
+  base_font = font_google("Roboto Mono"),
+  code_font = font_google("Roboto Mono")
 )
 
 # Mapeo a nombres de variables existentes para compatibilidad
@@ -41,7 +41,7 @@ svir_ode_model <- function(t, state, parameters) {
   with(as.list(c(state, parameters)), {
     N <- S + V + I + R
     if (N == 0) N <- 1 # Evitar división por cero
-
+    
     dS_dt <- -beta * S * I / N - nu * S
     dI_dt <- beta * S * I / N - miu * I
     dR_dt <- miu * I
@@ -272,17 +272,29 @@ ui = page_sidebar(
                        "; font-weight: bold;")
       ),
       
+      selectInput(
+        "preset_disease",
+        "Casos predefinidos:",
+        choices = c(
+          "Personalizado" = "none",
+          "Sarampión" = "sarampion",
+          "Tos ferina" = "tosferina",
+          "Viruela"   = "viruela"
+        ),
+        selected = "none"
+      ),
+      
       sliderInput("beta", 
                   "Tasa de infección (β):",
-                  min = 0.01, max = 1.0, value = 0.8, step = 0.01),
+                  min = 0.001, max = 5.0, value = 0.8, step = 0.001),
       
       sliderInput("miu", 
                   "Tasa de recuperación (μ):",
-                  min = 0.01, max = 0.5, value = 0.01, step = 0.01),
+                  min = 0.001, max = 0.5, value = 0.01, step = 0.001),
       
       sliderInput("nu",
                   "Tasa de vacunación (ν):",
-                  min = 0, max = 0.5, value = 0.15, step = 0.01)
+                  min = 0, max = 0.5, value = 0.15, step = 0.001)
     ),
     
     card(
@@ -292,14 +304,6 @@ ui = page_sidebar(
                        "; font-weight: bold;")
       ),
       
-      sliderInput("N", 
-                  "Población Total / Nodos (N):",
-                  min = 50, max = 1000, value = 100, step = 50),
-      
-      sliderInput("k", 
-                  "Grado promedio (k):",
-                  min = 2, max = 20, value = 5, step = 1),
-      
       selectInput("network_type", 
                   "Tipo de red:",
                   choices = c(
@@ -307,7 +311,15 @@ ui = page_sidebar(
                     "Erdős-Rényi" = "erdos_renyi",
                     "Barabási-Albert" = "barabasi_albert"
                   ),
-                  selected = "regular")
+                  selected = "regular"),
+      
+      sliderInput("N", 
+                  "Población Total / Nodos (N):",
+                  min = 50, max = 1000, value = 100, step = 50),
+      
+      sliderInput("k", 
+                  "Grado promedio (k):",
+                  min = 2, max = 20, value = 5, step = 1)
     ),
     
     card(
@@ -457,6 +469,28 @@ server = function(input, output, session) {
     })
   })
   
+  # -- seleccion de enfermedad
+  observeEvent(input$preset_disease, {
+    
+    if (input$preset_disease == "sarampion") {
+      updateSliderInput(session, "beta", value = 1.875)
+      updateSliderInput(session, "miu", value = 0.125)
+      updateSliderInput(session, "nu", value = 0.2)
+    }
+    
+    if (input$preset_disease == "tosferina") {
+      updateSliderInput(session, "beta", value = 0.67)
+      updateSliderInput(session, "miu", value = 0.047)
+      updateSliderInput(session, "nu", value = 0.08)
+    }
+    
+    if (input$preset_disease == "viruela") {
+      updateSliderInput(session, "beta", value = 0.312)
+      updateSliderInput(session, "miu", value = 0.062)
+      updateSliderInput(session, "nu", value = 0.01)
+    }
+  })
+  
   ###########################################################################
   # GRAFICOS
   ###########################################################################
@@ -466,7 +500,7 @@ server = function(input, output, session) {
     
     df_ode <- ode_results() %>%
       pivot_longer(cols = c(S, V, I, R), names_to = "Compartimento", values_to = "N")
-      
+    
     p <- ggplot(df_ode, aes(x = time, y = N, color = Compartimento)) +
       geom_line(linewidth = 1) +
       scale_color_manual(
@@ -523,7 +557,7 @@ server = function(input, output, session) {
          layout = layout_with_fr(G))
     
     legend("topright",
-           legend = c("Susceptible (S)", "Infectado (I)", "Recuperado (R)", "Vacunado (V)"),
+           legend = c("Susceptible (S)", "Infectado (I)"),
            col = c(color_s, color_i, color_r, color_v),
            pch = 19,
            pt.cex = 2,
