@@ -557,7 +557,7 @@ server = function(input, output, session) {
          layout = layout_with_fr(G))
     
     legend("topright",
-           legend = c("Susceptible (S)", "Infectado (I)", "Recuperado (R)", "Vacunado (V)"),
+           legend = c("Susceptible (S)", "Infectado (I)"),
            col = c(color_s, color_i, color_r, color_v),
            pch = 19,
            pt.cex = 2,
